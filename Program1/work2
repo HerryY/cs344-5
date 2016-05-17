@@ -1,0 +1,187 @@
+#!/bin/bash
+
+
+select_rows()
+{
+    echo -e "Average\tMedian" > results
+
+    while read myLine
+    do
+        # Init/Reset tracking variables 
+        sum=0 
+        count=0 
+        average=0
+    
+        #-----------------------------------
+        # Sort into temp file to make median
+        # calc easier
+        #-----------------------------------
+        echo $myLine > TMP
+        tr " " "\n" < TMP | sort -g > sorted
+        sortedLine=$( cat sorted )
+
+
+        #----------------------------#
+        # Loop to sum a row	
+        # Also counts values in a row
+        #----------------------------#	
+        for i in $sortedLine
+        do
+            num=$i
+            count=$[ $count + 1 ]
+            sum=$[ $sum + $num ]
+        done
+
+        #----------------------------------
+        # Setup and Find Median by counting.
+        # Each line gets sorted above.
+        #----------------------------------
+        halfCount=`expr $[ $count / 2 ] + 1`
+        x=1  #counter
+
+        for y in $sortedLine
+        do
+            num2=$y
+            if [ $x -le $halfCount ]
+            then
+                median=$num2
+                x=$[ $x + 1 ]
+            fi
+        done
+
+        #----------------------------------------------------------
+        # Average is Sum of Row divided by count of Row.
+        # Using Arb Prec calc to get float initially; then add
+        # .5 followed by integer division to
+        # to get appropriate rounding
+        #---------------------------------------------------------
+        average=$( echo "scale=2;  $sum / $count" | bc )
+        average=$( echo "($average + .5) / 1" | bc )
+
+        #Append Line Results to Temp File
+        echo -e "$average\t$median" >> results
+
+    done < $user_file
+
+    cat results
+
+    rm -f results
+}
+
+select_col()
+{
+    # Init counter/tracking variables
+    col=1
+    j=0
+
+    # Get the number of columns from 'w count'--------
+    num_col=$( head -n 1 $user_file | wc -w )
+ 
+    #-------------------------------------------------
+    # Loop through the file and cut a new column with
+    # each pass.
+    #-------------------------------------------------
+    while [ $j -lt $num_col ]
+    do
+        sum=0
+        count=0
+        average=0
+
+        line=$( cut -c $col $user_file )
+        echo $line > TMP
+
+        # Translate and Sort for easier calc.
+        tr " " "\n" < TMP | sort -g > sorted
+        sortedLine=$( cat sorted )
+
+        #--------------------------------------------
+        # Loop sorted line to sum the digits
+        #--------------------------------------------
+        for i in $sortedLine
+        do
+            sum=`expr $sum + $i`
+            count=`expr $count + 1`
+        done
+
+
+        #--------------------------------------------
+        # Find the average of each column.
+        #--------------------------------------------
+        average=$( echo "scale=2;  $sum / $count" | bc )
+        average=$( echo "($average + .5) / 1" | bc )
+       
+
+        #----------------------------------
+        # Setup and Find Median by counting.
+        # Each line gets sorted above.
+        #----------------------------------
+        halfCount=`expr $[ $count / 2 ] + 1`
+        x=1  #counter
+
+        for y in $sortedLine
+        do
+            num2=$y
+            if [ $x -le $halfCount ]
+            then
+                median=$num2
+                x=$[ $x + 1 ]
+            fi
+        done
+
+        # Write Averages and Medians to Temp File
+        echo $average >> avg
+        echo $median >> med
+
+        # Increment counters
+        col=`expr $col + 2`
+        j=`expr $j + 1`
+    done
+    
+    #--------------------------------------------------
+    # Write final results to a temp file in the 
+    # required format.  This section also cleans up 
+    # temp files when complete.
+    #--------------------------------------------------    
+    echo -e "Averages: " > results
+    tr "\n" "\t" < avg >> results
+    echo -e "\n" >> results
+    echo -e "Medians: " >> results
+    tr "\n" "\t" < med >> results
+    echo -e "\n" >> results
+  
+    # Remove Temp files "avg" and "med"
+    rm -f avg med
+
+    # Output and remove file "results"
+    cat results
+    rm -f results
+
+}
+
+#-------------------------------------
+# PROGRAM 
+#-------------------------------------
+#user_file=$1
+#select_rows
+#select_col
+#cat results
+
+if [[ "$#" -gt 2 ]]
+then
+    echo "Usage: stats {-rows|-cols} [file]" >&2
+    exit 1
+fi
+
+
+if [[ "$1" == -r* ]]
+then
+    user_file=$2
+    select_rows
+elif [[ "$1" == -c* ]]
+then
+    user_file=$2
+    select_col
+else
+    echo "Usage: stats {-rows|-cols} [file]" >&2
+    exit 1
+fi
